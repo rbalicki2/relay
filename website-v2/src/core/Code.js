@@ -16,7 +16,8 @@ import * as React from 'react';
 // Light theme
 
 /* eslint-disable lint/fb-fds-usage-colors */
-const tag = '#aa0982';
+// const tag = '#aa0982';
+const tag = 'yellow';
 const attribute = '#4876d6';
 const value = '#c96765';
 const punctuation = '#403f53';

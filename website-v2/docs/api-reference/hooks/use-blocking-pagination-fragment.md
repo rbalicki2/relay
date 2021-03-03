@@ -11,6 +11,5 @@ import {OssOnly, FbInternalOnly} from 'internaldocs-fb-helpers';
 
 NOTE: `useBlockingPaginationFragment` is meant to be used only in React Concurrent Mode, since it can't provide full Suspense capabilities outside of Concurrent Mode.
 
-In the meantime, see our [Blocking ("all-at-once") Pagination Guide](../../guided-tour/list-data/blocking-pagination).
 
 <DocsRating />

@@ -8,7 +8,7 @@ name: Docusaurus-v2
 on:
   push:
     branches:
-      - master
+      - master-v2
 
 jobs:
   build-and-deploy:

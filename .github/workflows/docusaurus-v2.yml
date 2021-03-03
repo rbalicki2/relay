@@ -25,6 +25,11 @@ jobs:
           yarn build
         working-directory: website-v2/
 
+      - name: List files
+        run: |
+          find .
+        working-directory: website-v2/build/
+
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@3.7.1
         with:

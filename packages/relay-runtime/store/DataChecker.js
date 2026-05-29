@@ -451,9 +451,23 @@ class DataChecker {
           this._checkModuleImport(selection, dataID);
           break;
         case 'Defer':
-        case 'Stream':
-          this._traverseSelections(selection.selections, dataID);
+        case 'Stream': {
+          const isDeferred =
+            selection.if == null ||
+            Boolean(this._getVariableValue(selection.if));
+          if (isDeferred) {
+            // Defer/stream is active: client extension fields inside are
+            // expected to be absent. Mirrors the ClientExtension pattern.
+            const prevRecordWasMissing = this._recordWasMissing;
+            this._traverseSelections(selection.selections, dataID);
+            this._recordWasMissing = prevRecordWasMissing;
+          } else {
+            // Defer/stream is inactive (if: false): fields are expected
+            // inline and must be present.
+            this._traverseSelections(selection.selections, dataID);
+          }
           break;
+        }
         case 'FragmentSpread':
           const prevVariables = this._variables;
           this._variables = getLocalVariables(

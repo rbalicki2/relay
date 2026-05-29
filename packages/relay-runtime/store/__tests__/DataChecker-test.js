@@ -1554,13 +1554,15 @@ describe('check()', () => {
       expect(target.size()).toBe(0);
     });
 
-    it('returns false when deferred selections are not fetched', () => {
+    it('returns available when deferred selections are not fetched (defer is always active)', () => {
+      // Unconditional @defer is always active. Missing fields inside an
+      // active defer block should not cause check() to report "missing".
       const storeData: RecordSourceJSON = {
         '1': {
           __id: '1',
           __typename: 'User',
           id: '1',
-          // 'name' not fetched
+          // 'name' not fetched — but defer is active so this is expected
         },
         'client:root': {
           __id: 'client:root',
@@ -1585,9 +1587,284 @@ describe('check()', () => {
       );
       expect(status).toEqual({
         mostRecentlyInvalidatedAt: null,
-        status: 'missing',
+        status: 'available',
       });
       expect(target.size()).toBe(0);
+    });
+  });
+
+  describe('when @defer contains client extension fields', () => {
+    let DeferWithClientExtQuery;
+
+    beforeEach(() => {
+      graphql`
+        fragment DataCheckerTestDeferClientExtFragment on User {
+          id
+          name
+          nickname
+        }
+      `;
+
+      DeferWithClientExtQuery = graphql`
+        query DataCheckerTestDeferClientExtQuery($id: ID!) {
+          node(id: $id) {
+            ...DataCheckerTestDeferClientExtFragment
+              @dangerously_unaliased_fixme
+              @defer(label: "TestFragment")
+          }
+        }
+      `;
+    });
+
+    it('returns available when server fields present but client extension fields missing', () => {
+      const storeData: RecordSourceJSON = {
+        '1': {
+          __id: '1',
+          __typename: 'User',
+          id: '1',
+          name: 'Alice',
+          // 'nickname' is a client extension field — never server-delivered
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      const source = RelayRecordSource.create(storeData);
+      const target = RelayRecordSource.create();
+      const status = check(
+        () => source,
+        () => target,
+        INTERNAL_ACTOR_IDENTIFIER_DO_NOT_USE,
+        createNormalizationSelector(
+          getRequest(DeferWithClientExtQuery).operation,
+          'client:root',
+          {id: '1'},
+        ),
+        [],
+        null,
+        defaultGetDataID,
+      );
+      expect(status).toEqual({
+        mostRecentlyInvalidatedAt: null,
+        status: 'available',
+      });
+    });
+
+    it('returns available when all fields missing inside active defer', () => {
+      const storeData: RecordSourceJSON = {
+        '1': {
+          __id: '1',
+          __typename: 'User',
+          id: '1',
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      const source = RelayRecordSource.create(storeData);
+      const target = RelayRecordSource.create();
+      const status = check(
+        () => source,
+        () => target,
+        INTERNAL_ACTOR_IDENTIFIER_DO_NOT_USE,
+        createNormalizationSelector(
+          getRequest(DeferWithClientExtQuery).operation,
+          'client:root',
+          {id: '1'},
+        ),
+        [],
+        null,
+        defaultGetDataID,
+      );
+      expect(status).toEqual({
+        mostRecentlyInvalidatedAt: null,
+        status: 'available',
+      });
+    });
+
+    it('returns available when all fields present including client extension', () => {
+      const storeData: RecordSourceJSON = {
+        '1': {
+          __id: '1',
+          __typename: 'User',
+          id: '1',
+          name: 'Alice',
+          nickname: 'Ali',
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      const source = RelayRecordSource.create(storeData);
+      const target = RelayRecordSource.create();
+      const status = check(
+        () => source,
+        () => target,
+        INTERNAL_ACTOR_IDENTIFIER_DO_NOT_USE,
+        createNormalizationSelector(
+          getRequest(DeferWithClientExtQuery).operation,
+          'client:root',
+          {id: '1'},
+        ),
+        [],
+        null,
+        defaultGetDataID,
+      );
+      expect(status).toEqual({
+        mostRecentlyInvalidatedAt: null,
+        status: 'available',
+      });
+    });
+  });
+
+  describe('when @defer directive with if variable is present', () => {
+    let ConditionalDeferQuery;
+
+    beforeEach(() => {
+      graphql`
+        fragment DataCheckerTestDeferIfFragment on User {
+          id
+          name
+        }
+      `;
+
+      ConditionalDeferQuery = graphql`
+        query DataCheckerTestDeferIfQuery($id: ID!, $shouldDefer: Boolean!) {
+          node(id: $id) {
+            ...DataCheckerTestDeferIfFragment
+              @dangerously_unaliased_fixme
+              @defer(if: $shouldDefer, label: "TestFragment")
+          }
+        }
+      `;
+    });
+
+    it('returns available when deferred selections missing and defer is active (if: true)', () => {
+      const storeData: RecordSourceJSON = {
+        '1': {
+          __id: '1',
+          __typename: 'User',
+          id: '1',
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      const source = RelayRecordSource.create(storeData);
+      const target = RelayRecordSource.create();
+      const status = check(
+        () => source,
+        () => target,
+        INTERNAL_ACTOR_IDENTIFIER_DO_NOT_USE,
+        createNormalizationSelector(
+          getRequest(ConditionalDeferQuery).operation,
+          'client:root',
+          {id: '1', shouldDefer: true},
+        ),
+        [],
+        null,
+        defaultGetDataID,
+      );
+      expect(status).toEqual({
+        mostRecentlyInvalidatedAt: null,
+        status: 'available',
+      });
+    });
+
+    it('returns missing when deferred selections missing and defer is inactive (if: false)', () => {
+      const storeData: RecordSourceJSON = {
+        '1': {
+          __id: '1',
+          __typename: 'User',
+          id: '1',
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      const source = RelayRecordSource.create(storeData);
+      const target = RelayRecordSource.create();
+      const status = check(
+        () => source,
+        () => target,
+        INTERNAL_ACTOR_IDENTIFIER_DO_NOT_USE,
+        createNormalizationSelector(
+          getRequest(ConditionalDeferQuery).operation,
+          'client:root',
+          {id: '1', shouldDefer: false},
+        ),
+        [],
+        null,
+        defaultGetDataID,
+      );
+      expect(status).toEqual({
+        mostRecentlyInvalidatedAt: null,
+        status: 'missing',
+      });
+    });
+
+    it('returns available when all data present regardless of defer variable', () => {
+      const storeData: RecordSourceJSON = {
+        '1': {
+          __id: '1',
+          __typename: 'User',
+          id: '1',
+          name: 'Alice',
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      const source = RelayRecordSource.create(storeData);
+      const target = RelayRecordSource.create();
+
+      const statusTrue = check(
+        () => source,
+        () => target,
+        INTERNAL_ACTOR_IDENTIFIER_DO_NOT_USE,
+        createNormalizationSelector(
+          getRequest(ConditionalDeferQuery).operation,
+          'client:root',
+          {id: '1', shouldDefer: true},
+        ),
+        [],
+        null,
+        defaultGetDataID,
+      );
+      expect(statusTrue).toEqual({
+        mostRecentlyInvalidatedAt: null,
+        status: 'available',
+      });
+
+      const statusFalse = check(
+        () => source,
+        () => target,
+        INTERNAL_ACTOR_IDENTIFIER_DO_NOT_USE,
+        createNormalizationSelector(
+          getRequest(ConditionalDeferQuery).operation,
+          'client:root',
+          {id: '1', shouldDefer: false},
+        ),
+        [],
+        null,
+        defaultGetDataID,
+      );
+      expect(statusFalse).toEqual({
+        mostRecentlyInvalidatedAt: null,
+        status: 'available',
+      });
     });
   });
 
